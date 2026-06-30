@@ -36,7 +36,7 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
   
   const lens = await cameraKit.lensRepository.loadLens(
-    'ee28d990-4fc1-401b-a7b6-2b773b9884b8',
+    '22971f54-8227-4b34-9795-24c094e40774',
     '7e39b6a3-2fab-4ad0-80d7-be024c517e7d'
   );
   await session.applyLens(lens);
@@ -159,7 +159,14 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
  
   // ── Capture ───────────────────────────────────────────────────────────────
   let isCapturing = false;
- 
+    // ── Manual capture button ───────────────────────────────────────────────
+  const captureBtn = document.getElementById('capture-btn') as HTMLButtonElement;
+
+  captureBtn.addEventListener('click', () => {
+    if (!isCapturing && !countdownActive) {
+      startCountdownCapture(); // same flow as victory sign — keeps it consistent
+    }
+  });
   // async function doCapture() {
   //   if (isCapturing) return;
   //   isCapturing = true;
@@ -184,7 +191,36 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
   if (isCapturing) return;
   isCapturing = true;
   status.textContent = '⏳ Processing...';
+  // Hide ALL HTML overlays before capture — including the button
+  const uiElements = [
+    'victory-indicator',
+    'thumbs-countdown',
+    'hand-cursor',
+    'status',
+    'capture-btn',      // ← added
+  ].map(id => document.getElementById(id) as HTMLElement);
 
+  uiElements.forEach(el => { if (el) el.style.visibility = 'hidden'; });
+   try {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
+    const imageBase64 = await captureFrame( liveRenderTarget);
+    const publicUrl   = await uploadToCloudinary(imageBase64);
+
+    await QRCode.toCanvas(qrCanvas, publicUrl, {
+      width: 280, margin: 2, errorCorrectionLevel: 'Q'
+    });
+    qrCanvas.style.width  = '280px';
+    qrCanvas.style.height = '280px';
+    qrPanel.classList.add('visible');
+    status.textContent = '';
+    startAutoClose();
+
+  } catch (err) {
+    console.error('❌ doCapture:', err);
+    status.textContent = '❌ Upload failed.';
+  } 
   try {
     const imageBase64 = await captureFrame(liveRenderTarget);
 
@@ -210,6 +246,7 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
     status.textContent = '❌ Upload failed. Please try again.';
   } finally {
     isCapturing = false;
+     uiElements.forEach(el => { if (el) el.style.visibility = 'visible'; });
   }
 }
  
